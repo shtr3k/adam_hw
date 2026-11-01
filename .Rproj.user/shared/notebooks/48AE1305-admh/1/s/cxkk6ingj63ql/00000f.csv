@@ -1,0 +1,4 @@
+"0","adsl_path <- ""ADSL.xlsx"""
+"0","mh_path   <- ""../SDTM/MH_MEDICALHISTORY.xlsx"""
+"0","spec_path <- ""../Specs/ADaM-like Spec.xlsx"""
+"0","out_xlsx  <- ""ADMH.xlsx"""
