@@ -1,7 +1,7 @@
 ---
 title: "adsl"
 format: html
-editor: visual
+editor: 
 ---
 
 ```{r setup, include=FALSE}
@@ -329,4 +329,144 @@ ADSL <- ADSL |>
 
 ```{r}
 write.xlsx(ADSL, "./ADaM-like/ADSL.xlsx")
+```
+
+Теперь соберем ADMH. Подгрузим то, что нам нужно
+
+- MH_MEDICALHISTORY.xlsx
+
+- ADSL.xlsx (он уже в среде)
+
+```{r}
+mh_ds <- read.xlsx("./SDTM/MH_MEDICALHISTORY.xlsx")
+```
+
+Теперь вытащим переменные. Из ADSL мы возьмем
+
+- STUDYID
+
+- USUBJID
+
+- TRTP
+
+- TRTPN
+
+```{r}
+adsl_part <- ADSL |>
+    select(STUDYID, USUBJID, TRTP, TRTPN)
+```
+
+Из MH_MEDICALHISTORY мы вытащим:
+
+- MHSEQ
+
+- MHCAT (Medical History)
+
+- MHTERM
+
+- MHDECOD
+
+- MHBODSYS
+
+- MHSTDTC
+
+- ASTDT
+
+- ASTDTF
+
+- MHEDTC
+
+- AENDT
+
+- AENDTF
+
+- MHENRTPT
+
+- MHENRF
+
+```{r}
+mh_part <- mh_ds |>
+  select(MHSEQ, MHTERM, MHDECOD, MHBODSYS, MHSTDTC, MHENDTC, MHENRTPT)
+
+#Собираем согласно спеку
+mhcat_part <- mh_ds |>
+  filter(MHCAT == "Medical History") |>
+  select(MHCAT)
+
+astdt <- mh_ds |>
+  mutate(
+    ASTDT = case_when(
+      str_length(MHSTDTC) == 7 ~ paste0(MHSTDTC, "-01"),
+      str_length(MHSTDTC) == 4 ~ paste0(MHSTDTC, "-01-01"),
+      str_length(MHSTDTC) == 10 ~ MHSTDTC,
+      is.na(MHSTDTC) ~ ""
+    ),
+    ASTDT = format(as.Date(MHSTDTC, format = "%Y-%m-%d"), "%d.%m.%Y")
+  ) |>
+  select(ASTDT, MHSTDTC)
+
+astdtf <- astdt |>
+  mutate(
+    ASTDTF = case_when(
+      str_length(MHSTDTC) == 7 ~ "D",
+      str_length(MHSTDTC) == 4 ~ "M",
+      str_length(ASTDT) == 10 ~ "",
+      is.na(ASTDT) ~ "Y"
+    )
+  ) |>
+  select(ASTDTF)
+
+
+aendt <- mh_ds |>
+  mutate(
+    AENDT = case_when(
+      MHENRTPT == "ONGOING" ~ ""
+    )
+  ) |>
+  mutate(
+    MHENDTC = as.character(MHENDTC),
+    AENDT = case_when(
+      str_length(MHENDTC) == 7 ~ paste0(MHENDTC, "-01"),
+      str_length(MHENDTC) == 4 ~ paste0(MHENDTC, "-01-01"),
+      str_length(MHENDTC) == 10 ~ MHENDTC,
+      is.na(MHENDTC) ~ ""
+    )
+  ) |>
+  mutate(
+    AENDT = format(as.Date(MHENDTC, format = "%D-%m-%y"), "%d.%m.%Y")
+  ) |>
+  select(AENDT, MHENDTC)
+
+aendtf <- aendt |>
+  mutate(
+    AENDTF = case_when(
+      str_length(MHENDTC) == 7 ~ "D",
+      str_length(MHENDTC) == 4 ~ "M",
+      str_length(AENDT) == 10 ~ "",
+      is.na(AENDT) ~ "Y"
+    )
+  ) |>
+  select(AENDTF)
+
+mhenrf <- mh_ds |>
+  mutate(MHENRF = if_else(MHENRTPT == "ONGOING", "ONGOING", "")) |>
+  select(MHENRF)
+
+astdt_part <- astdt |>
+  select(ASTDT)
+aendt_part <- aendt |>
+  select(AENDT)
+
+all_parts <- mhcat_part |>
+  bind_rows(astdt_part) |>
+  bind_rows(astdtf) |>
+  bind_rows(aendt_part) |>
+  bind_rows(aendtf) |>
+  bind_rows(mhenrf)
+
+part1 <- cross_join(adsl_part, mh_part)
+part2 <- cross_join(part1, mhcat_part)
+part3 <- part2 |>
+  bind_rows(all_parts)
+part3
 ```
